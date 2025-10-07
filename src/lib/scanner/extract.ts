@@ -16,17 +16,11 @@ export type ExtractedScan = {
   uses_on_label?: string[];
   inferred_uses?: string[];
 };
-/** Lazy import tesseract ONLY when the function runs (Node runtime) */
+/** Use centralized OCR helper (server-only) */
+import { ocrBuffer } from '../ocr';
 export async function performOCR(buffer: Buffer): Promise<{ text: string; confidence: number }> {
-  const { recognize } = await import('tesseract.js');
-  const { data } = await recognize(buffer, 'eng');
-
-  return {
-    text: data?.text ?? '',
-    confidence: typeof data?.confidence === 'number' ? data.confidence : 0,
-  };
-
-
+  const text = await ocrBuffer(buffer, 'eng');
+  return { text: text ?? '', confidence: 0 };
 }
 
 // Use the aiExtraction.js utilities for OCR and extraction (ESM)
