@@ -1,0 +1,280 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+/* ─────────── Roles & Auth ─────────── */
+
+model Admin {
+  id           Int         @id @default(autoincrement())
+  email        String      @unique
+  createdAt    DateTime    @default(now())
+  passwordHash String
+  roles        AdminRole[]
+  createdUsers User[]      @relation("UserCreatedByAdmin")
+}
+
+model User {
+  id           Int              @id @default(autoincrement())
+  email        String           @unique
+  passwordHash String
+  createdAt    DateTime         @default(now())
+  createdById  Int
+  batches      InventoryBatch[]
+  pharmacies   Pharmacy[]
+  shelves      PharmacyShelf[]
+  sales        Sale[]
+  createdBy    Admin            @relation("UserCreatedByAdmin", fields: [createdById], references: [id])
+  roles        UserRole[]
+}
+
+model Role {
+  id          Int          @id @default(autoincrement())
+  name        String       @unique
+  createdAt   DateTime     @default(now())
+  description String?
+  adminRoles  AdminRole[]
+  userRoles   UserRole[]
+  permissions Permission[] @relation("RolePermissions")
+}
+
+model Permission {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  createdAt   DateTime @default(now())
+  description String?
+  roles       Role[]   @relation("RolePermissions")
+}
+
+model UserRole {
+  id     Int  @id @default(autoincrement())
+  userId Int
+  roleId Int
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+}
+
+model AdminRole {
+  id      Int   @id @default(autoincrement())
+  adminId Int
+  roleId  Int
+  admin   Admin @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  role    Role  @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([adminId, roleId])
+}
+
+/* ─────────── Pharmacy & Inventory ─────────── */
+
+model Pharmacy {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  name        String
+  address     String?
+  lat         Decimal? @db.Decimal(9, 6)
+  lng         Decimal? @db.Decimal(9, 6)
+  sharePublic Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+enum BatchStatus {
+  ACTIVE
+  EXPIRED
+  DEPLETED
+}
+
+/* NEW: canonical dosage form enum */
+enum DosageForm {
+  TABLET
+  CAPSULE
+  SYRUP
+  SUSPENSION
+  SOLUTION
+  DROPS
+  INJECTION
+  OINTMENT
+  CREAM
+  GEL
+  OTHER
+}
+
+model Medicine {
+  id           Int              @id @default(autoincrement())
+  name         String
+  strength     String?
+  packSize     String?
+  mrp          Decimal?         @db.Decimal(12, 2)
+  manufacturer String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  /* NEW: set a canonical dosage form for this medicine */
+  dosageForm   DosageForm?
+
+  batches      InventoryBatch[]
+  facts        MedicineFacts?
+
+  @@index([name])
+}
+
+model InventoryBatch {
+  id              Int                   @id @default(autoincrement())
+  userId          Int
+  medicineId      Int
+  batchNo         String
+  expiryDate      DateTime?
+  manufactureDate DateTime?
+  qtyAvailable    Int                   @default(0)   // tablets or bottles (for liquids)
+  costPrice       Decimal?              @db.Decimal(12, 2)
+  mrp             Decimal?              @db.Decimal(12, 2)
+  status          BatchStatus           @default(ACTIVE)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  medicine        Medicine              @relation(fields: [medicineId], references: [id])
+  user            User                  @relation(fields: [userId], references: [id])
+  shelves         InventoryShelfAlloc[]
+
+  @@unique([userId, batchNo])
+  @@index([userId])
+  @@index([medicineId])
+  @@index([batchNo])
+}
+
+model PharmacyShelf {
+  id          Int                   @id @default(autoincrement())
+  userId      Int
+  name        String
+  code        String?
+  location    String?
+  capacity    Int?
+  isActive    Boolean               @default(true)
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  allocations InventoryShelfAlloc[]
+  user        User                  @relation(fields: [userId], references: [id])
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+model InventoryShelfAlloc {
+  id         Int            @id @default(autoincrement())
+  batchId    Int
+  shelfId    String?
+  shelfName  String
+  qty        Int
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  shelfRefId Int?
+
+  batch      InventoryBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  shelfRef   PharmacyShelf? @relation(fields: [shelfRefId], references: [id])
+
+  @@index([batchId])
+  @@index([shelfRefId])
+}
+
+/* ─────────── Medicine Facts (tablet & liquid) ─────────── */
+
+model MedicineFacts {
+  id                Int      @id @default(autoincrement())
+  medicineId        Int      @unique
+
+  /* Tablet/Capsule */
+  slipsCount        Int?
+  tabletsPerSlip    Int?
+  totalTablets      Int?
+
+  /* Shared MRP */
+  mrpAmount         Decimal? @db.Decimal(12, 2)
+  mrpCurrency       String?
+  mrpText           String?
+
+  /* Safety & Info */
+  inferredUses      String[]
+  careNotes         String[]
+  sideEffectsCommon String[]
+  avoidIf           String[]
+  precautions       String[]
+  interactionsKey   String[]
+
+  /* NEW — Liquid-Specific */
+  bottleVolumeMl        Int?              // e.g., 60/100/120 ml per bottle
+  bottlesPerPack        Int?              // default 1 if not specified
+  concentrationMgPer5ml Decimal? @db.Decimal(12, 3) // “X mg per 5 ml”
+  concentrationLabel    String?           // free text of per-5ml multi-ingredient line
+  dosageFormLabel       String?           // label text like "Syrup", "Suspension"
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  medicine          Medicine @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+}
+
+/* ─────────── Sales ─────────── */
+
+model Sale {
+  id        Int        @id @default(autoincrement())
+  userId    Int
+  total     Decimal    @db.Decimal(12, 2)
+  createdAt DateTime   @default(now())
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lines     SaleLine[]
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model SaleLine {
+  id        Int      @id @default(autoincrement())
+  saleId    Int
+  batchNo   String
+  name      String
+  price     Decimal  @db.Decimal(12, 2)
+  qty       Int
+  lineTotal Decimal  @db.Decimal(12, 2)
+  createdAt DateTime @default(now())
+
+  sale      Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@index([saleId])
+  @@index([batchNo])
+  @@index([name])
+}
+
+/* ─────────── Scan Archive ─────────── */
+
+model Scan {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  rawText   String?
+  aiData    Json     // JSONB
+
+  // convenience columns for quick filtering
+  name        String?   @db.VarChar(200)
+  batchNumber String?   @db.VarChar(40)
+  mfgDate     DateTime?
+  expDate     DateTime?
+
+  images ScanImage[]
+}
+
+model ScanImage {
+  id           String @id @default(cuid())
+  scanId       String
+  scan         Scan   @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  contentType  String
+  originalName String
+  data         Bytes  // BYTEA
+}
