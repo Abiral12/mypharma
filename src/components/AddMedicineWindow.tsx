@@ -251,7 +251,6 @@ function FirstTimeSetupModal({ onComplete }: { onComplete: (shelves: ShelfInfo[]
 
   const handleSubmit = () => {
     if (numShelves < 1 || avgCapacity < 1) {
-      // eslint-disable-next-line no-alert
       alert('Please enter valid number of shelves and capacity.');
       return;
     }
@@ -356,7 +355,7 @@ export default function AddMedicineWindow({
     const y = Math.max(12, Math.round((viewport.h - h) / 2));
     setPos({ x, y });
     setSize({ w, h });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    
   }, [viewport.w, viewport.h, maximized, mobile]);
 
   /* sections / list */
@@ -367,7 +366,7 @@ export default function AddMedicineWindow({
   const [q, setQ] = useState('');
   const dq = useDebounce(q, 300);
 
-  async function fetchItems(): Promise<void> {
+  const fetchItems = React.useCallback(async function fetchItemsInner(): Promise<void> {
     setListMsg(null);
     setLoading(true);
     try {
@@ -381,13 +380,13 @@ export default function AddMedicineWindow({
     } finally {
       setLoading(false);
     }
-  }
+  }, [dq]);
   useEffect(() => {
     if (open && (section === 'all' || section === 'update' || section === 'delete')) {
       void fetchItems();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [section, dq, open]);
+    
+  }, [section, dq, open, fetchItems]);
 
   /* ─────────────── Local shelves (name + max capacity) ─────────────── */
 
@@ -730,8 +729,8 @@ export default function AddMedicineWindow({
   // ─── Scanner state ───────────────────────────────────────────────
 const scanInputRef = useRef<HTMLInputElement>(null);
 const [scanning, setScanning] = useState(false);
-const [scanMsg, setScanMsg] = useState<{ kind: 'ok'|'err'|'info'; text: string } | null>(null);
-const [scanPreviews, setScanPreviews] = useState<string[]>([]); // optional thumbnails
+  const [, setScanMsg] = useState<{ kind: 'ok'|'err'|'info'; text: string } | null>(null);
+  // thumbnails state removed; previews are temporary object URLs handled locally
 
 
 // camera modal
@@ -750,8 +749,9 @@ async function openCamera() {
     setCamStream(stream);
     setCamShots([]);
     setCameraOpen(true);
-  } catch (e:any) {
-    setScanMsg({ kind:'err', text: e?.message || 'Unable to access camera. Try Files instead.' });
+  } catch (e: unknown) {
+    const msg = (e as { message?: string })?.message ?? 'Unable to access camera. Try Files instead.';
+    setScanMsg({ kind:'err', text: msg });
   }
 }
 
@@ -778,22 +778,23 @@ function captureFromVideo(videoEl: HTMLVideoElement) {
 }
 
 
-function applyExtractedToForm(x: any) {
+function applyExtractedToForm(x: unknown) {
   if (!x) return;
-  setMedName(x.name || '');
-  setBatchNumber(x.batch_number || '');
-  setMfgDate((x.manufacturing_date || '').slice(0, 10));
-  setExpDate((x.expiry_date || '').slice(0, 10));
-  setSlipsCount(String(x.slips_count ?? ''));
-  setTabsPerSlip(String(x.tablets_per_slip ?? ''));
-  setMrpAmount(String(x.mrp_amount ?? ''));
-  setMrpText(x.mrp_text || '');
-  setUses((x.uses_on_label || x.inferred_uses || []).join(', '));
-  setCare((x.care_notes || []).join(', '));
-  setEffects((x.side_effects_common || []).join(', '));
-  setAvoid((x.avoid_if || []).join(', '));
-  setPrecautions((x.precautions || []).join(', '));
-  setInteractions((x.interactions_key || []).join(', '));
+  const obj = x as Record<string, unknown>;
+  setMedName((obj['name'] as string) || '');
+  setBatchNumber((obj['batch_number'] as string) || '');
+  setMfgDate(((obj['manufacturing_date'] as string) || '').slice(0, 10));
+  setExpDate(((obj['expiry_date'] as string) || '').slice(0, 10));
+  setSlipsCount(String((obj['slips_count'] as unknown) ?? ''));
+  setTabsPerSlip(String((obj['tablets_per_slip'] as unknown) ?? ''));
+  setMrpAmount(String((obj['mrp_amount'] as unknown) ?? ''));
+  setMrpText((obj['mrp_text'] as string) || '');
+  setUses(((obj['uses_on_label'] as string[]) || (obj['inferred_uses'] as string[]) || []).join(', '));
+  setCare(((obj['care_notes'] as string[]) || []).join(', '));
+  setEffects(((obj['side_effects_common'] as string[]) || []).join(', '));
+  setAvoid(((obj['avoid_if'] as string[]) || []).join(', '));
+  setPrecautions(((obj['precautions'] as string[]) || []).join(', '));
+  setInteractions(((obj['interactions_key'] as string[]) || []).join(', '));
   setShowDetails(true);
 }
 
@@ -802,10 +803,6 @@ const MAX_FILES = 20;
 const MIN_FILES = 2;
 const MAX_EACH_MB = 5;
 
-function openScanner() {
-  setScanMsg(null);
-  scanInputRef.current?.click();
-}
 async function dataURLToFile(dataURL: string, i: number): Promise<File> {
   const res = await fetch(dataURL);
   const blob = await res.blob();
@@ -863,7 +860,7 @@ async function onScanPicked(filesIn: FileList | File[] | null) {
     list.push(f);
     previews.push(URL.createObjectURL(f));
   }
-  setScanPreviews(previews);
+  // previews are available via local object URLs but not persisted in component state
 
   // Build FormData
   const fd = new FormData();
@@ -881,7 +878,7 @@ async function onScanPicked(filesIn: FileList | File[] | null) {
     }
 
 const extracted = json?.data?.extractedData;
-const combinedText = json?.data?.combinedText;
+  // combinedText not used currently
 
 if (!extracted || Object.values(extracted).every(v => v == null || v === '' || (Array.isArray(v) && v.length === 0))) {
   setScanMsg({ kind: 'info', text: 'Scan completed but no fields were recognized. Try clearer photos or fill manually.' });
@@ -890,8 +887,9 @@ if (!extracted || Object.values(extracted).every(v => v == null || v === '' || (
   setScanMsg({ kind: 'ok', text: 'Scan complete. Fields populated.' });
 }
 
-  } catch (e: any) {
-    setScanMsg({ kind: 'err', text: e?.message || 'Scan error' });
+  } catch (e: unknown) {
+    const msg = (e as { message?: string })?.message ?? 'Scan error';
+    setScanMsg({ kind: 'err', text: msg });
   } finally {
     setScanning(false);
   }
@@ -1331,10 +1329,8 @@ if (!extracted || Object.values(extracted).every(v => v == null || v === '' || (
                             variant="outline"
                             className="h-9"
                             onClick={() => {
-                              // eslint-disable-next-line no-alert
                               const name = prompt('New shelf name?');
                               if (!name?.trim()) return;
-                              // eslint-disable-next-line no-alert
                               const capStr = prompt('Maximum capacity for this shelf?', '100');
                               const cap = Math.max(1, Number(capStr || '0'));
                               addShelfInline(name.trim(), cap);
@@ -1827,12 +1823,8 @@ if (!extracted || Object.values(extracted).every(v => v == null || v === '' || (
                                       variant="outline"
                                       className="h-8 px-2"
                                       onClick={() => {
-                                        // eslint-disable-next-line no-alert
                                         const name = prompt('Shelf name', sh.name) ?? sh.name;
-                                        // eslint-disable-next-line no-alert
-                                        const capStr =
-                                          prompt('Max capacity', String(sh.capacity)) ??
-                                          String(sh.capacity);
+                                        const capStr = prompt('Max capacity', String(sh.capacity)) ?? String(sh.capacity);
                                         const cap = Math.max(1, Number(capStr || '1'));
                                         updateShelfInline(sh.id, {
                                           name: name.trim(),
@@ -1925,7 +1917,8 @@ if (!extracted || Object.values(extracted).every(v => v == null || v === '' || (
           <div className="flex flex-wrap gap-2 max-h-40 overflow-auto">
             {camShots.map((url, i) => (
               <div key={i} className="relative">
-                <img src={url} className="h-16 w-16 object-cover rounded border" />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt={`camera shot ${i + 1}`} className="h-16 w-16 object-cover rounded border" />
                 <button
                   className="absolute -top-1 -right-1 bg-white rounded-full border px-1 text-xs"
                   onClick={() => setCamShots(prev => prev.filter((_, idx) => idx !== i))}
@@ -2009,9 +2002,7 @@ function MobileShelvesLocal({
                     size="sm"
                     variant="outline"
                     onClick={() => {
-                      // eslint-disable-next-line no-alert
                       const name = prompt('Shelf name', s.name) ?? s.name;
-                      // eslint-disable-next-line no-alert
                       const capStr = prompt('Max capacity', String(s.capacity)) ?? String(s.capacity);
                       const cap = Math.max(1, Number(capStr || '1'));
                       onUpdate(s.id, { name: name.trim(), capacity: cap });
@@ -2392,7 +2383,7 @@ function MobileAddSimple(props: MobileAddSimpleProps) {
             props.setSupplierName('');
             props.setQty('');
             props.setMinQty('');
-            props.setAddMsg(null);
+            setAddMsg(null);
             props.setSelectedShelfId('');
             props.setSlipsCount('');
             props.setTabsPerSlip('');
@@ -2459,7 +2450,6 @@ type MobileListCrudProps = {
 };
 
 function MobileListCrud(props: MobileListCrudProps) {
-  const { section } = props;
   return (
     <>
       <div className="mb-2 flex gap-2">
