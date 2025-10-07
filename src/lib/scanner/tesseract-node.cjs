@@ -1,5 +1,6 @@
 // src/lib/scanner/tesseract-node.cjs
-const { createWorker } = require('tesseract.js');
+// const { createWorker } = require('tesseract.js');
+import { createWorker } from 'tesseract.js';
 
 async function ocrBuffer(buffer) {
   const worker = await createWorker({

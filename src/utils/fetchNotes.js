@@ -1,5 +1,6 @@
 // utils/fetchNotes.js
-const { OpenAI } = require('openai');
+// const { OpenAI } = require('openai');
+import OpenAI from 'openai';
 
 const client = new OpenAI({
   apiKey: process.env.OPENROUTER_API_KEY,
@@ -17,7 +18,7 @@ const client = new OpenAI({
  *   interactionsKey: string[]
  * }
  */
-async function fetchMedicineNotes(medicineName) {
+export async function fetchMedicineNotes(medicineName) {
   if (!medicineName) return null;
   try {
     const resp = await client.chat.completions.create({
@@ -71,4 +72,4 @@ Rules:
   }
 }
 
-module.exports = { fetchMedicineNotes };
+// function is exported where declared; no trailing export needed

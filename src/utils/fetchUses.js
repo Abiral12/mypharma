@@ -1,5 +1,6 @@
 // utils/fetchUses.js
-const { OpenAI } = require('openai');
+// const { OpenAI } = require('openai');
+import OpenAI from 'openai';
 
 // Uses OpenRouter (same as your vision/OCR code). Set OPENROUTER_API_KEY in .env
 const client = new OpenAI({
@@ -8,7 +9,7 @@ const client = new OpenAI({
 });
 
 // Keep it concise and safe. We only need a short bullet list.
-async function fetchUsesFromInternet(medicineName) {
+export async function fetchUsesFromInternet(medicineName) {
   if (!medicineName) return null;
   try {
     const resp = await client.chat.completions.create({
@@ -44,4 +45,4 @@ async function fetchUsesFromInternet(medicineName) {
   }
 }
 
-module.exports = { fetchUsesFromInternet };
+// function is exported where declared; no trailing export needed

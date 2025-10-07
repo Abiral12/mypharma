@@ -10,6 +10,15 @@ export const dynamic = "force-dynamic";
 
 const prisma = new PrismaClient();
 
+// Fail-fast guard: ensure helper functions are present (clearer error than a later TypeError)
+if (typeof extractProductDataFromImages !== 'function' || typeof performOCR !== 'function') {
+  console.error('scanner helpers missing', {
+    extractProductDataFromImages: typeof extractProductDataFromImages,
+    performOCR: typeof performOCR,
+  });
+  throw new Error('Internal: OCR helpers not available - check src/utils/aiExtraction.js exports');
+}
+
 // Helper: read up to N files named "images"
 async function readImageBuffers(form: FormData, max = 20) {
   const files = form.getAll("images").filter(Boolean) as File[];

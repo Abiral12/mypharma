@@ -1,8 +1,15 @@
 // utils/aiExtraction.js
-const Tesseract = require('tesseract.js');
-const sharp = require('sharp');
-const { OpenAI } = require('openai');
-require('dotenv').config();
+// const Tesseract = require('tesseract.js');
+// const sharp = require('sharp');
+// const { OpenAI } = require('openai');
+
+'use server';
+import 'server-only';
+
+// require('dotenv').config();
+import OpenAI from 'openai';
+import Tesseract from 'tesseract.js';
+import sharp from 'sharp';
 
 /* ===================== Config ===================== */
 const VISION_MODEL = 'qwen/qwen-2.5-vl-72b-instruct';      // vision-capable
@@ -28,7 +35,7 @@ async function toDataUrlJPEG(buf, maxW = 1600, quality = 80) {
 }
 
 /* ===================== OCR ===================== */
-async function performOCR(imageBuffer) {
+export async function performOCR(imageBuffer) {
   const pre = await preprocessForOCR(imageBuffer);
   const result = await Tesseract.recognize(pre, 'eng+nep', {
     logger: m => console.log(m),
@@ -595,7 +602,7 @@ Rules:
 }
 
 /* ===================== Public: Vision-first, then OCR fallback ===================== */
-async function extractProductDataFromImages(imageBuffers) {
+export async function extractProductDataFromImages(imageBuffers) {
   if (!process.env.OPENROUTER_API_KEY) throw new Error('OPENROUTER_API_KEY not set');
 
   // 1) Vision attempt
@@ -734,7 +741,4 @@ ${schemaText}`
 }
 
 /* ===================== Exports ===================== */
-module.exports = {
-  performOCR,
-  extractProductDataFromImages,
-};
+// (functions are exported where declared) — avoid duplicate export statement
