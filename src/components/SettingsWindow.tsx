@@ -158,7 +158,7 @@ export default function SettingsWindow({
       };
     }
     return { w: Math.max(size.w, MIN_W), h: Math.max(size.h, MIN_H) };
-  }, [isMobile, maximized, viewport.w, viewport.h, size.w, size.h]);
+  }, [isMobile, maximized, viewport.w, viewport.h, size.w, size.h, MIN_W, MIN_H]);
 
   useEffect(() => {
     if (isMobile) return;

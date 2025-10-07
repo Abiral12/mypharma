@@ -1,7 +1,5 @@
 // server-only ensures this file never gets included on the client
 import 'server-only';
-import type { Worker as TesseractWorker } from 'tesseract.js';
-import Tesseract from 'tesseract.js';
 
 // ✅ shared type for everything the route expects
 export type ExtractedScan = {
@@ -20,30 +18,25 @@ export type ExtractedScan = {
 };
 /** Lazy import tesseract ONLY when the function runs (Node runtime) */
 export async function performOCR(buffer: Buffer): Promise<{ text: string; confidence: number }> {
-  const { createWorker } = await import('tesseract.js');
-      
-const { data } = await Tesseract.recognize(buffer, 'eng');
+  const { recognize } = await import('tesseract.js');
+  const { data } = await recognize(buffer, 'eng');
 
   return {
     text: data?.text ?? '',
     confidence: typeof data?.confidence === 'number' ? data.confidence : 0,
   };
 
+
 }
 
-
-
-// Use the aiExtraction.js utilities for OCR and extraction
-import path from 'path';
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const aiExtraction = require('../../utils/aiExtraction.js');
+// Use the aiExtraction.js utilities for OCR and extraction (ESM)
+import { extractProductDataFromImages as aiExtract } from '../../utils/aiExtraction.js';
 
 export async function extractProductDataFromImages(buffers: Buffer[]) {
   // Run OCR and extraction using the aiExtraction.js logic
   try {
     // aiExtraction expects imageBuffers (array of Buffer)
-    const result = await aiExtraction.extractProductDataFromImages(buffers);
+  const result = await aiExtract(buffers);
     // Defensive: ensure at least _source is set
     return result || { _source: 'ocr@aiExtraction-null' };
   } catch (err) {
@@ -52,5 +45,5 @@ export async function extractProductDataFromImages(buffers: Buffer[]) {
   }
 }
 
-export async function fetchUsesFromInternet(_name: string) { return []; }
-export async function fetchMedicineNotes(_name: string) { return {}; }
+export async function fetchUsesFromInternet(_name: string) { void _name; return []; }
+export async function fetchMedicineNotes(_name: string) { void _name; return {}; }

@@ -110,14 +110,14 @@ function toIsoDate(str) {
   // 2025-09-02 / 2025/9/2 / 2025.9.2
   m = s.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/);
   if (m) {
-    const [_, y, mo, d] = m;
+    const [, y, mo, d] = m;
     return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
   }
 
   // 02-09-2025 / 2/9/25
   m = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
   if (m) {
-    let [_, d, mo, y] = m;
+    let [, d, mo, y] = m;
     if (y.length === 2) y = (y >= '70' ? '19' : '20') + y;
     return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
   }

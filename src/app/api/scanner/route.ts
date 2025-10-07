@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient, Prisma } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
 
 import { extractProductDataFromImages, performOCR } from "@/utils/aiExtraction";
 import { fetchUsesFromInternet } from "@/utils/fetchUses";
@@ -292,11 +292,12 @@ export async function POST(req: NextRequest) {
 
     // 4) Dosage-form decision + liquid parsing
     const dosageLabel =
-      // @ts-ignore
+      
       (extracted?.dosage_form_on_label as string | null | undefined) ?? null;
     const decided = guessDosageForm(dosageLabel, combinedText);
-    const dosageFormEnum = (decided || (dosageLabel ? dosageLabel.toUpperCase() : null)) as
-      | Prisma.DosageForm
+    // use a plain string enum here to avoid requiring a regenerated Prisma client at build time
+    const dosageFormEnum: string | null | undefined = (decided || (dosageLabel ? dosageLabel.toUpperCase() : null)) as
+      | string
       | null
       | undefined;
 
@@ -328,13 +329,13 @@ export async function POST(req: NextRequest) {
       inferred_uses: inferred_uses || null,
 
       // Optional label hints your extractor may output
-      // @ts-ignore
+      
       uses_on_label: extracted?.uses_on_label || null,
-      // @ts-ignore
+      
       active_ingredient_on_label: extracted?.active_ingredient_on_label || null,
-      // @ts-ignore
+      
       strength_on_label: extracted?.strength_on_label || null,
-      // @ts-ignore
+      
       dosage_form_on_label: extracted?.dosage_form_on_label || null,
 
       // computed dosage form
@@ -370,9 +371,7 @@ export async function POST(req: NextRequest) {
         await prisma.medicine.update({
           where: { id: existingMed.id },
           data: {
-            // @ts-ignore
             strength: extracted?.strength_on_label || undefined,
-            dosageForm: (dosageFormEnum as any) ?? undefined,
             updatedAt: new Date(),
           },
         });
@@ -380,9 +379,7 @@ export async function POST(req: NextRequest) {
         const created = await prisma.medicine.create({
           data: {
             name: extractedData.name,
-            // @ts-ignore
             strength: extracted?.strength_on_label || null,
-            dosageForm: (dosageFormEnum as any) ?? null,
             createdAt: new Date(),
             updatedAt: new Date(),
           },
@@ -404,7 +401,7 @@ export async function POST(req: NextRequest) {
             totalTablets: extractedData.total_tablets ?? null,
 
             // shared mrp
-            mrpAmount: extractedData.mrp_amount != null ? (extractedData.mrp_amount as any) : null,
+            mrpAmount: extractedData.mrp_amount != null ? (extractedData.mrp_amount as unknown as number) : null,
             mrpCurrency: extractedData.mrp_currency,
             mrpText: extractedData.mrp_text,
 
@@ -421,12 +418,10 @@ export async function POST(req: NextRequest) {
             bottlesPerPack: extractedData.bottles_per_pack ?? (isLiquid ? 1 : null),
             concentrationMgPer5ml:
               extractedData.concentration_mg_per_5ml != null
-                ? (extractedData.concentration_mg_per_5ml as any)
+                ? (extractedData.concentration_mg_per_5ml as unknown as number)
                 : null,
             concentrationLabel: extractedData.concentration_label ?? null,
-            dosageFormLabel:
-              // @ts-ignore
-              extracted?.dosage_form_on_label || null,
+            dosageFormLabel: extracted?.dosage_form_on_label || null,
 
             createdAt: new Date(),
             updatedAt: new Date(),
@@ -436,7 +431,7 @@ export async function POST(req: NextRequest) {
             tabletsPerSlip: extractedData.tablets_per_slip ?? null,
             totalTablets: extractedData.total_tablets ?? null,
 
-            mrpAmount: extractedData.mrp_amount != null ? (extractedData.mrp_amount as any) : null,
+            mrpAmount: extractedData.mrp_amount != null ? (extractedData.mrp_amount as unknown as number) : null,
             mrpCurrency: extractedData.mrp_currency,
             mrpText: extractedData.mrp_text,
 
@@ -451,12 +446,10 @@ export async function POST(req: NextRequest) {
             bottlesPerPack: extractedData.bottles_per_pack ?? (isLiquid ? 1 : null),
             concentrationMgPer5ml:
               extractedData.concentration_mg_per_5ml != null
-                ? (extractedData.concentration_mg_per_5ml as any)
+                ? (extractedData.concentration_mg_per_5ml as unknown as number)
                 : null,
             concentrationLabel: extractedData.concentration_label ?? null,
-            dosageFormLabel:
-              // @ts-ignore
-              extracted?.dosage_form_on_label || null,
+            dosageFormLabel: extracted?.dosage_form_on_label || null,
 
             updatedAt: new Date(),
           },
@@ -467,7 +460,7 @@ export async function POST(req: NextRequest) {
     // Create Scan + images (archive everything we saw)
     const scan = await prisma.scan.create({
       data: {
-        aiData: extractedData as any,
+  aiData: extractedData as unknown as object,
         rawText: combinedText,
         name: extractedData.name,
         batchNumber: extractedData.batch_number,
@@ -501,10 +494,11 @@ export async function POST(req: NextRequest) {
         })),
       },
     });
-  } catch (err: any) {
-    console.error("scanner error:", err?.message || err);
+  } catch (err: unknown) {
+    const e = err as { message?: string };
+    console.error("scanner error:", e?.message || err);
     return NextResponse.json(
-      { success: false, message: err?.message || "Unexpected error" },
+      { success: false, message: e?.message || "Unexpected error" },
       { status: 400 }
     );
   }

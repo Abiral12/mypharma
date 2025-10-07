@@ -195,7 +195,7 @@ export default function SellMedicineWindow({
   const [q, setQ] = useState('');
   const dq = useDebounce(q);
 
-  async function fetchItems() {
+  const fetchItems = React.useCallback(async () => {
     setMsg(null);
     setLoading(true);
     try {
@@ -211,10 +211,11 @@ export default function SellMedicineWindow({
     } finally {
       setLoading(false);
     }
-  }
+  }, [dq]);
+
   useEffect(() => {
     if (section === 'sell') fetchItems();
-  }, [section, dq]); // intentionally not adding fetchItems to deps
+  }, [section, dq, fetchItems]);
 
   /* cart */
   type CartLine = {
@@ -380,6 +381,7 @@ export default function SellMedicineWindow({
     if (!scanOpen) return;
     let stream: MediaStream | null = null;
     let stopped = false;
+    const localVideo = videoRef.current; // capture stable ref for cleanup
 
     async function init() {
       setScanErr(null);
@@ -402,7 +404,7 @@ export default function SellMedicineWindow({
         await v.play();
 
         const tick = async () => {
-          const vid = videoRef.current;
+    const vid = localVideo;
           const det = detectorRef.current;
           if (!vid || !det || stopped) return;
           try {
@@ -431,13 +433,8 @@ export default function SellMedicineWindow({
     return () => {
       stopped = true;
       if (frameRef.current) cancelAnimationFrame(frameRef.current);
-      const localVideo = videoRef.current;
       if (localVideo) {
-        try {
-          localVideo.pause();
-        } catch {
-          /* noop */
-        }
+        try { localVideo.pause(); } catch { /* noop */ }
         const src = localVideo.srcObject;
         if (src && typeof (src as MediaStream).getTracks === 'function') {
           (src as MediaStream).getTracks().forEach((t) => t.stop());
@@ -457,7 +454,7 @@ export default function SellMedicineWindow({
   const [pages, setPages] = useState(1);
   const [openSale, setOpenSale] = useState<Sale | null>(null);
 
-  async function fetchHistory(p = page) {
+  const fetchHistory = React.useCallback(async (p = 1) => {
     setHMsg(null);
     setHLoading(true);
     try {
@@ -474,10 +471,11 @@ export default function SellMedicineWindow({
     } finally {
       setHLoading(false);
     }
-  }
+  }, [dHQ]);
+
   useEffect(() => {
     if (section === 'history') fetchHistory(1);
-  }, [section, dHQ]); // intentionally not adding fetchHistory to deps
+  }, [section, dHQ, fetchHistory]);
 
   /* ───────────────────── Early return AFTER hooks ───────────────────── */
   if (!open) return null;
