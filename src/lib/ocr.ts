@@ -1,51 +1,59 @@
-import { createWorker } from 'tesseract.js';
+// ./src/lib/ocr.ts
+import { createWorker, type Worker } from 'tesseract.js';
+
 export const runtime = 'nodejs';
 
-export async function ocrBuffer(buf: Buffer, lang: string | string[] = 'eng') {
-  // CDN fallbacks (safe for serverless environments where node_modules isn't available at runtime)
+function normalizeLangs(lang: string | string[]): string {
+  if (Array.isArray(lang)) return lang.filter(Boolean).map(s => s.trim()).join('+') || 'eng';
+  const s = String(lang || 'eng').trim();
+  return s ? s.split(/[+,\s]+/).filter(Boolean).join('+') : 'eng';
+}
+
+/**
+ * Works with tesseract.js v5/v6.
+ * DEV (local): put these in /public/tesseract/
+ *   - worker.min.js
+ *   - tesseract-core-simd.js
+ *   - tesseract-core-simd.wasm
+ * PROD: falls back to CDN unless env overrides are set.
+ *
+ * Env (optional):
+ *   TESSERACT_WORKER_PATH -> URL/path to worker.min.js
+ *   TESSERACT_CORE_PATH   -> URL/path to tesseract-core-simd.js (JS loader, not the .wasm)
+ */
+export async function ocrBuffer(buf: Buffer, lang: string | string[] = 'eng'): Promise<string> {
+  const isProd = process.env.NODE_ENV === 'production';
+
   const cdnWorker = 'https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/worker.min.js';
-  const cdnCore = 'https://cdn.jsdelivr.net/npm/tesseract.js-core@6.0.0/tesseract-core-simd.wasm';
+  const cdnCoreJs = 'https://cdn.jsdelivr.net/npm/tesseract.js-core@6.0.0/tesseract-core-simd.js';
 
-  // Prefer explicit env overrides. In development prefer the local public/ copy so you can iterate offline.
-  const isDev = process.env.NODE_ENV === 'development';
-  const envCore = process.env.TESSERACT_CORE_PATH;
-  const envWorker = process.env.TESSERACT_WORKER_PATH;
+  const workerPath =
+    process.env.TESSERACT_WORKER_PATH ??
+    (isProd ? cdnWorker : '/tesseract/worker.min.js');
 
-  // const corePath = envCore ?? (isDev ? '/tesseract-core-simd.wasm' : cdnCore);
-  const workerPath = envWorker ?? (isDev ? '/tesseract-core-simd.js' : cdnWorker);
+  // IMPORTANT: JS loader (not the .wasm)
+  const corePath =
+    process.env.TESSERACT_CORE_PATH ??
+    (isProd ? cdnCoreJs : '/tesseract/tesseract-core-simd.js');
 
-  // Create worker WITHOUT passing functions (like logger) which cannot be structured-cloned.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const worker: any = await createWorker({
-    workerPath,
-    corePath: '/node_modules/tesseract.js-core/tesseract-core-simd.js',
-    langPath: 'https://tessdata.projectnaptha.com/4.0.0_best',
-    cacheMethod: 'none',
-  } as any);
+  const langs = normalizeLangs(lang);
 
-  // worker typing in d.ts is conservative; treat as any to call runtime methods
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const w: any = worker;
-
-  // Normalize language param: accept 'eng', 'eng+nep', array, comma or space separated
-  let langsArr: string[];
-  if (Array.isArray(lang)) langsArr = lang;
-  else if (typeof lang === 'string') {
-    if (lang.includes('+')) langsArr = lang.split('+').map(s => s.trim()).filter(Boolean);
-    else if (lang.includes(',')) langsArr = lang.split(',').map(s => s.trim()).filter(Boolean);
-    else if (lang.includes(' ')) langsArr = lang.split(/\s+/).map(s => s.trim()).filter(Boolean);
-    else langsArr = [lang.trim()];
-  } else {
-    langsArr = ['eng'];
-  }
+  // v5/v6 signature: createWorker(langsOrOptions?, oem?, options?)
+  const worker: Worker = await createWorker(
+    langs,           // languages, e.g. "eng+nep"
+    undefined,       // OEM (optional)
+    {
+      workerPath,
+      corePath,      // JS loader; it will fetch the adjacent .wasm
+      langPath: 'https://tessdata.projectnaptha.com/4.0.0_best',
+      cacheMethod: 'none',
+    }
+  );
 
   try {
-    await w.loadLanguage(langsArr);
-    await w.initialize(langsArr.join('+'));
-    const { data } = await w.recognize(buf);
+    const { data } = await worker.recognize(buf);
     return data?.text ?? '';
   } finally {
-    // best-effort terminate to free resources; swallow errors
-    try { await w.terminate(); } catch { /* ignore */ }
+    try { await worker.terminate(); } catch { /* ignore */ }
   }
 }
